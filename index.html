@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chess Opening Explorer</title>
+<script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen p-4">
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-bold text-center mb-2 text-blue-400">Chess Opening Explorer</h1>
+
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="md:col-span-2">
+      <label for="opening" class="block text-xs text-gray-400 mb-1">Select Opening</label>
+      <select id="opening" class="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm" aria-label="Chess opening">
+        <option value="e4e5">Ruy Lopez / Italian Game</option>
+        <option value="e4c5">Sicilian Defense</option>
+        <option value="d4d5">Queen's Gambit</option>
+        <option value="e4e6">French Defense</option>
+        <option value="d4nf6">King's Indian Defense</option>
+        <option value="nf3d5">London System</option>
+        <option value="e4c6">Caro-Kann Defense</option>
+        <option value="e4nf6">Alekhine Defense</option>
+      </select>
+    </div>
+    <div class="flex items-end gap-1">
+      <button onclick="prevMove()" class="flex-1 bg-gray-600 hover:bg-gray-700 px-3 py-2 rounded text-sm" aria-label="Previous move">◀</button>
+      <button onclick="nextMove()" class="flex-1 bg-blue-600 hover:bg-blue-700 px-3 py-2 rounded text-sm" aria-label="Next move">▶</button>
+      <button onclick="resetBoard()" class="flex-1 bg-gray-700 hover:bg-gray-600 px-3 py-2 rounded text-sm">↺</button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+    <div>
+      <canvas id="board" width="320" height="320" class="w-full rounded border border-gray-700" aria-label="Chess board"></canvas>
+    </div>
+    <div class="bg-gray-800 rounded p-4">
+      <h2 id="openingName" class="text-base font-bold text-yellow-400 mb-2"></h2>
+      <div id="moveList" class="mb-3 text-sm space-y-1"></div>
+      <div id="moveInfo" class="text-xs text-gray-400 bg-gray-700 rounded p-2"></div>
+      <div class="mt-2 text-xs text-gray-500">
+        Move <span id="currentMove" class="text-blue-400 font-bold">0</span> of <span id="totalMoves" class="text-gray-400"></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const PIECES = {
+  wK:'♔', wQ:'♕', wR:'♖', wB:'♗', wN:'♘', wP:'♙',
+  bK:'♚', bQ:'♛', bR:'♜', bB:'♝', bN:'♞', bP:'♟',
+};
+
+const OPENINGS = {
+  'e4e5': {
+    name: 'Ruy Lopez / Italian Game',
+    desc: 'The classical 1.e4 e5 complex — one of the oldest and most studied openings.',
+    moves: [
+      { white: 'e4', black: 'e5', note: 'Central pawns — fight for the center' },
+      { white: 'Nf3', black: 'Nc6', note: 'White attacks e5, Black defends it' },
+      { white: 'Bb5', black: 'a6', note: 'Ruy Lopez — pin the knight (or Italian: Bc4 targeting f7)' },
+      { white: 'Ba4', black: 'Nf6', note: 'Black counters with the Morphy Defense' },
+      { white: 'O-O', black: 'Be7', note: 'White castles — typical solid setup' },
+    ]
+  },
+  'e4c5': {
+    name: 'Sicilian Defense',
+    desc: 'The most popular and combative reply to 1.e4. Black fights asymmetrically for the center.',
+    moves: [
+      { white: 'e4', black: 'c5', note: 'Asymmetric fight — Black attacks d4, not e4' },
+      { white: 'Nf3', black: 'd6', note: 'White develops, Black prepares e5 or Nf6' },
+      { white: 'd4', black: 'cxd4', note: 'Open Sicilian — sharp double-edged play' },
+      { white: 'Nxd4', black: 'Nf6', note: 'White recaptures, Black develops' },
+      { white: 'Nc3', black: 'a6', note: 'Najdorf Variation — the most popular Sicilian line' },
+    ]
+  },
+  'd4d5': {
+    name: "Queen's Gambit",
+    desc: "One of the oldest openings — White offers a flank pawn to control the center.",
+    moves: [
+      { white: 'd4', black: 'd5', note: 'Both sides stake center claims immediately' },
+      { white: 'c4', black: 'e6', note: "Queen's Gambit Declined — solid and classical" },
+      { white: 'Nc3', black: 'Nf6', note: 'Development race' },
+      { white: 'Bg5', black: 'Be7', note: 'Classical QGD main line' },
+      { white: 'e3', black: 'O-O', note: 'Black castles safely — long positional game' },
+    ]
+  },
+  'e4e6': {
+    name: 'French Defense',
+    desc: "Black builds a solid structure at the cost of the light-squared bishop.",
+    moves: [
+      { white: 'e4', black: 'e6', note: 'French — prepares ...d5 next move' },
+      { white: 'd4', black: 'd5', note: 'Both sides control the center' },
+      { white: 'Nc3', black: 'Nf6', note: 'Classical variation' },
+      { white: 'Bg5', black: 'dxe4', note: 'Burn Variation — releases tension early' },
+      { white: 'Nxe4', black: 'Be7', note: 'Solid setup for Black' },
+    ]
+  },
+  'd4nf6': {
+    name: "King's Indian Defense",
+    desc: "A hypermodern defense — Black allows White a big center to attack it later.",
+    moves: [
+      { white: 'd4', black: 'Nf6', note: 'Black develops to attack the center indirectly' },
+      { white: 'c4', black: 'g6', note: 'King\'s Indian setup — fianchetto coming' },
+      { white: 'Nc3', black: 'Bg7', note: 'The powerful KID bishop aims at the center' },
+      { white: 'e4', black: 'd6', note: 'White establishes large center' },
+      { white: 'Nf3', black: 'O-O', note: 'Black castles — ready to attack with ...e5' },
+    ]
+  },
+  'nf3d5': {
+    name: 'London System',
+    desc: "A solid, systematic setup for White — avoids heavy theory.",
+    moves: [
+      { white: 'Nf3', black: 'd5', note: 'Flexible first moves' },
+      { white: 'd4', black: 'Nf6', note: 'London setup begins' },
+      { white: 'Bf4', black: 'e6', note: 'The London bishop — key piece' },
+      { white: 'e3', black: 'Bd6', note: 'Solid pawn structure for White' },
+      { white: 'Bd3', black: 'O-O', note: 'Both sides develop normally' },
+    ]
+  },
+  'e4c6': {
+    name: 'Caro-Kann Defense',
+    desc: "A solid alternative to the French — Black's light-squared bishop stays active.",
+    moves: [
+      { white: 'e4', black: 'c6', note: 'Caro-Kann — prepares ...d5' },
+      { white: 'd4', black: 'd5', note: 'Black immediately contests the center' },
+      { white: 'Nc3', black: 'dxe4', note: 'Classical main line' },
+      { white: 'Nxe4', black: 'Bf5', note: 'Black\'s light-squared bishop gets active early' },
+      { white: 'Ng3', black: 'Bg6', note: 'Typical Caro-Kann structure' },
+    ]
+  },
+  'e4nf6': {
+    name: "Alekhine Defense",
+    desc: "A provocative defense — Black invites White to attack with pawns.",
+    moves: [
+      { white: 'e4', black: 'Nf6', note: 'Alekhine — the knight attacks e4 immediately' },
+      { white: 'e5', black: 'Nd5', note: 'White advances, Black retreats (to provoke further)' },
+      { white: 'd4', black: 'd6', note: 'Four Pawns Attack setup' },
+      { white: 'Nf3', black: 'dxe5', note: 'Black breaks down the center' },
+      { white: 'dxe5', black: 'Bg4', note: 'Active pin — typical Alekhine strategy' },
+    ]
+  },
+};
+
+// Board state
+let board = [];
+let moveIndex = 0;
+let currentOpening = 'e4e5';
+
+function initBoard() {
+  board = [
+    ['bR','bN','bB','bQ','bK','bB','bN','bR'],
+    ['bP','bP','bP','bP','bP','bP','bP','bP'],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    [null,null,null,null,null,null,null,null],
+    ['wP','wP','wP','wP','wP','wP','wP','wP'],
+    ['wR','wN','wB','wQ','wK','wB','wN','wR'],
+  ];
+}
+
+// Simple move applier (algebraic → board coords)
+function applyMove(notation, isWhite) {
+  notation = notation.trim();
+  const color = isWhite ? 'w' : 'b';
+  const opp = isWhite ? 'b' : 'w';
+  const dir = isWhite ? -1 : 1;
+  const homeRow = isWhite ? 6 : 1;
+
+  if (notation === 'O-O') {
+    // Kingside castle
+    const row = isWhite ? 7 : 0;
+    board[row][6] = color + 'K';
+    board[row][4] = null;
+    board[row][5] = color + 'R';
+    board[row][7] = null;
+    return;
+  }
+
+  // Pawn move: e4, d5, etc.
+  const pawnMove = notation.match(/^([a-h])([1-8])$/);
+  if (pawnMove) {
+    const col = pawnMove[1].charCodeAt(0) - 97;
+    const row = 8 - parseInt(pawnMove[2]);
+    // Find pawn
+    for (let r = 0; r < 8; r++) {
+      if (board[r][col] === color + 'P') {
+        if (Math.abs(r - row) <= 2) {
+          board[r][col] = null;
+          board[row][col] = color + 'P';
+          return;
+        }
+      }
+    }
+    return;
+  }
+
+  // Pawn capture: cxd4, exd5, etc.
+  const pawnCap = notation.match(/^([a-h])x([a-h])([1-8])$/);
+  if (pawnCap) {
+    const fromCol = pawnCap[1].charCodeAt(0) - 97;
+    const toCol = pawnCap[2].charCodeAt(0) - 97;
+    const toRow = 8 - parseInt(pawnCap[3]);
+    for (let r = 0; r < 8; r++) {
+      if (board[r][fromCol] === color + 'P') {
+        board[r][fromCol] = null;
+        board[toRow][toCol] = color + 'P';
+        return;
+      }
+    }
+    return;
+  }
+
+  // Piece moves: Nf3, Bc4, etc.
+  const pieceMove = notation.match(/^([NBRQK])([a-h]?)([1-8]?)x?([a-h])([1-8])$/);
+  if (pieceMove) {
+    const piece = color + pieceMove[1];
+    const toCol = pieceMove[4].charCodeAt(0) - 97;
+    const toRow = 8 - parseInt(pieceMove[5]);
+
+    // Find the piece
+    for (let r = 0; r < 8; r++) {
+      for (let c = 0; c < 8; c++) {
+        if (board[r][c] === piece) {
+          board[r][c] = null;
+          board[toRow][toCol] = piece;
+          return;
+        }
+      }
+    }
+  }
+}
+
+function drawBoard() {
+  const canvas = document.getElementById('board');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const sq = W / 8;
+
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 8; c++) {
+      ctx.fillStyle = (r + c) % 2 === 0 ? '#f0d9b5' : '#b58863';
+      ctx.fillRect(c * sq, r * sq, sq, sq);
+
+      const piece = board[r][c];
+      if (piece) {
+        ctx.font = `${sq * 0.75}px serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillStyle = piece.startsWith('w') ? '#1a1a1a' : '#2d2d2d';
+        ctx.fillText(PIECES[piece], c * sq + sq/2, r * sq + sq/2);
+      }
+    }
+  }
+
+  // Rank/file labels
+  ctx.font = '10px sans-serif';
+  ctx.fillStyle = '#666';
+  'abcdefgh'.split('').forEach((f, i) => {
+    ctx.textAlign = 'center';
+    ctx.fillText(f, i * sq + sq/2, H - 2);
+  });
+  '87654321'.split('').forEach((r, i) => {
+    ctx.textAlign = 'left';
+    ctx.fillText(r, 2, i * sq + 12);
+  });
+}
+
+function updateUI() {
+  const op = OPENINGS[currentOpening];
+  document.getElementById('openingName').textContent = op.name;
+  document.getElementById('totalMoves').textContent = op.moves.length * 2;
+  document.getElementById('currentMove').textContent = moveIndex;
+
+  const moveList = document.getElementById('moveList');
+  moveList.innerHTML = op.moves.map((m, i) => {
+    const wActive = moveIndex === i * 2 + 1;
+    const bActive = moveIndex === i * 2 + 2;
+    return `<div class="flex gap-2 text-xs">
+      <span class="text-gray-500 w-4">${i+1}.</span>
+      <span class="${wActive ? 'text-white bg-blue-700 px-1 rounded' : 'text-gray-300'}">${m.white}</span>
+      <span class="${bActive ? 'text-white bg-blue-700 px-1 rounded' : 'text-gray-400'}">${m.black}</span>
+    </div>`;
+  }).join('');
+
+  const noteIdx = Math.floor((moveIndex - 1) / 2);
+  const note = moveIndex > 0 && op.moves[noteIdx] ? op.moves[noteIdx].note : op.desc;
+  document.getElementById('moveInfo').textContent = note;
+}
+
+function resetBoard() {
+  currentOpening = document.getElementById('opening').value;
+  moveIndex = 0;
+  initBoard();
+  drawBoard();
+  updateUI();
+}
+
+function nextMove() {
+  const op = OPENINGS[currentOpening];
+  const totalHalfMoves = op.moves.length * 2;
+  if (moveIndex >= totalHalfMoves) return;
+  moveIndex++;
+  const pairIdx = Math.floor((moveIndex - 1) / 2);
+  const isWhite = moveIndex % 2 === 1;
+  const move = isWhite ? op.moves[pairIdx].white : op.moves[pairIdx].black;
+  applyMove(move, isWhite);
+  drawBoard();
+  updateUI();
+}
+
+function prevMove() {
+  if (moveIndex <= 0) return;
+  // Rebuild from scratch
+  const savedIdx = moveIndex - 1;
+  initBoard();
+  for (let i = 1; i <= savedIdx; i++) {
+    const pairIdx = Math.floor((i - 1) / 2);
+    const isWhite = i % 2 === 1;
+    const op = OPENINGS[currentOpening];
+    const move = isWhite ? op.moves[pairIdx].white : op.moves[pairIdx].black;
+    applyMove(move, isWhite);
+  }
+  moveIndex = savedIdx;
+  drawBoard();
+  updateUI();
+}
+
+document.getElementById('opening').onchange = resetBoard;
+initBoard();
+drawBoard();
+updateUI();
+</script>
+</body>
+</html>
